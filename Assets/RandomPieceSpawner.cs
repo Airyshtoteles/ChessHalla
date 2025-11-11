@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 // NAMA FILE: RandomPieceSpawner.cs
 // FUNGSI: Spawn 2 tim di wilayah masing-masing (3 baris bawah vs 3 baris atas)
@@ -16,6 +17,22 @@ public class RandomPieceSpawner : MonoBehaviour
     [Header("Daftar Prefab Tim")]
     public GameObject[] whitePiecePrefabs;
     public GameObject[] blackPiecePrefabs;
+
+    [Header("Aturan Probabilitas (semakin tinggi weight, semakin sering muncul)")]
+    [Tooltip("Jika kosong akan dibuat default otomatis. weight = bobot pemilihan; maxPerTeam = batas jumlah per tim.")]
+    public List<PieceSpawnRule> pieceSpawnRules = new List<PieceSpawnRule>();
+
+    [System.Serializable]
+    public class PieceSpawnRule
+    {
+        public PieceType type;
+        [Min(0)] public int weight = 1;        // Bobot relatif
+        [Min(0)] public int maxPerTeam = 1;    // Batas jumlah spawn per tim
+    }
+
+    [Header("Opsi Khusus")]
+    [Tooltip("Pastikan tiap tim punya King minimal 1; jika belum ada, akan mengganti Pawn menjadi King")]
+    public bool ensureOneKingPerTeam = true;
 
     // Set ini melacak SEMUA kotak yang sudah terisi
     private HashSet<Vector2Int> occupiedTiles = new HashSet<Vector2Int>();
@@ -95,6 +112,38 @@ public class RandomPieceSpawner : MonoBehaviour
     /// </summary>
     void SpawnTeam(GameObject[] teamPrefabList, string teamName, int minY, int maxY)
     {
+        // Siapkan aturan default bila list kosong
+        if (pieceSpawnRules == null || pieceSpawnRules.Count == 0)
+        {
+            pieceSpawnRules = new List<PieceSpawnRule>
+            {
+                new PieceSpawnRule{ type = PieceType.King,   weight = 1,  maxPerTeam = 1 },
+                new PieceSpawnRule{ type = PieceType.Queen,  weight = 1,  maxPerTeam = 1 },
+                new PieceSpawnRule{ type = PieceType.Rook,   weight = 2,  maxPerTeam = 2 },
+                new PieceSpawnRule{ type = PieceType.Bishop, weight = 3,  maxPerTeam = 2 },
+                new PieceSpawnRule{ type = PieceType.Knight, weight = 3,  maxPerTeam = 2 },
+                new PieceSpawnRule{ type = PieceType.Pawn,   weight = 12, maxPerTeam = 99 },
+            };
+        }
+
+        // Buat lookup prefab per tipe
+        Dictionary<PieceType, List<GameObject>> prefabsByType = new Dictionary<PieceType, List<GameObject>>();
+        foreach (var go in teamPrefabList)
+        {
+            if (go == null) continue;
+            var mover = go.GetComponent<PieceMover>();
+            if (mover == null)
+            {
+                Debug.LogWarning($"[Spawner] Prefab {go.name} tidak punya PieceMover.");
+                continue;
+            }
+            if (!prefabsByType.ContainsKey(mover.pieceType)) prefabsByType[mover.pieceType] = new List<GameObject>();
+            prefabsByType[mover.pieceType].Add(go);
+        }
+
+        // Hitung spawn
+        Dictionary<PieceType,int> counts = new Dictionary<PieceType,int>();
+        List<GameObject> spawnedTeamPieces = new List<GameObject>();
         int spawnedCount = 0;
         int safetyBreak = 0; 
 
@@ -107,24 +156,54 @@ public class RandomPieceSpawner : MonoBehaviour
                 break; 
             }
 
-            // 1. Pilih LOKASI Acak
+            // 1. Pilih tipe berdasarkan bobot tersisa
+            var availableRules = pieceSpawnRules.Where(r => {
+                int current = counts.TryGetValue(r.type, out var c) ? c : 0;
+                return current < r.maxPerTeam && prefabsByType.ContainsKey(r.type) && prefabsByType[r.type].Count > 0;
+            }).ToList();
+            if (availableRules.Count == 0)
+            {
+                Debug.LogWarning($"[Spawner] Tidak ada tipe lagi yang boleh di-spawn untuk tim {teamName}.");
+                break;
+            }
+            int totalWeight = availableRules.Sum(r => r.weight);
+            if (totalWeight <= 0)
+            {
+                // fallback: treat all equal
+                totalWeight = availableRules.Count;
+                foreach (var r in availableRules) if (r.weight <= 0) r.weight = 1;
+            }
+            float pick = Random.value * totalWeight;
+            PieceType chosenType = availableRules[0].type;
+            int cumulative = 0;
+            foreach (var rule in availableRules)
+            {
+                cumulative += rule.weight;
+                if (pick <= cumulative)
+                {
+                    chosenType = rule.type;
+                    break;
+                }
+            }
+
+            // 2. Pilih LOKASI acak dalam area tim
             int randomX = Random.Range(0, boardLogic.columns);
             int randomY = Random.Range(minY, maxY); 
             
             Vector2Int gridPos = new Vector2Int(randomX, randomY);
 
-            // 2. Cek apakah lokasi sudah terisi
+            // 3. Cek apakah lokasi sudah terisi
             if (occupiedTiles.Contains(gridPos))
             {
                 continue; 
             }
 
-            // 3. Jika lokasi kosong:
+            // 4. Jika lokasi kosong:
             occupiedTiles.Add(gridPos); 
 
-            // Logika "lotre"
-            int randomPrefabIndex = Random.Range(0, teamPrefabList.Length);
-            GameObject pieceToSpawn = teamPrefabList[randomPrefabIndex];
+            // 5. Ambil prefab sesuai tipe (random skin jika >1)
+            var list = prefabsByType[chosenType];
+            GameObject pieceToSpawn = list[Random.Range(0, list.Count)];
 
             // --- INI BARIS YANG DIPERBAIKI ---
             // Saya tambahkan "From" di nama fungsinya
@@ -138,6 +217,41 @@ public class RandomPieceSpawner : MonoBehaviour
             TryRaiseSorting(go);
 
             spawnedCount++;
+            counts[chosenType] = counts.TryGetValue(chosenType, out var tmp) ? tmp + 1 : 1;
+            spawnedTeamPieces.Add(go);
+        }
+
+        // Pastikan ada King minimal 1 jika opsi aktif
+        if (ensureOneKingPerTeam)
+        {
+            bool hasKing = spawnedTeamPieces.Any(p => {
+                var m = p.GetComponent<PieceMover>();
+                return m != null && m.pieceType == PieceType.King;
+            });
+            if (!hasKing)
+            {
+                // Cari pawn untuk diganti
+                var pawnGO = spawnedTeamPieces.FirstOrDefault(p => {
+                    var m = p.GetComponent<PieceMover>();
+                    return m != null && m.pieceType == PieceType.Pawn;
+                });
+                if (pawnGO != null && prefabsByType.ContainsKey(PieceType.King) && prefabsByType[PieceType.King].Count > 0)
+                {
+                    // Ambil posisi grid pawn
+                    var pawnMover = pawnGO.GetComponent<PieceMover>();
+                    Vector2Int pawnGrid = pawnMover != null ? pawnMover.currentGridPos : Vector2Int.zero;
+                    Vector3 pawnWorld = pawnGO.transform.position;
+                    // Hapus pawn
+                    Destroy(pawnGO);
+                    spawnedTeamPieces.Remove(pawnGO);
+                    // Spawn king di posisi itu
+                    var kingPrefab = prefabsByType[PieceType.King][Random.Range(0, prefabsByType[PieceType.King].Count)];
+                    var kingGO = Instantiate(kingPrefab, pawnWorld, Quaternion.identity, transform);
+                    TryRaiseSorting(kingGO);
+                    spawnedTeamPieces.Add(kingGO);
+                    Debug.Log($"[Spawner] Tidak ada King untuk tim {teamName}, mengganti satu Pawn menjadi King.");
+                }
+            }
         }
     }
 

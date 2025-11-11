@@ -27,6 +27,10 @@ public class PieceMover : MonoBehaviour
 
     // Variabel untuk menyimpan posisi kita di grid
     public Vector2Int currentGridPos;
+    
+    // Tracking status drag & info awal
+    private bool isDragging = false;
+    private int initialRow; // baris awal saat pertama kali terdaftar (untuk pion double-step)
 
     void Start()
     {
@@ -48,6 +52,7 @@ public class PieceMover : MonoBehaviour
             // Ambil posisi awal dari spawner
             currentGridPos = boardLogic.GetGridPositionFromWorld(transform.position);
             boardLogic.RegisterPiece(this, currentGridPos.x, currentGridPos.y);
+            initialRow = currentGridPos.y; // simpan baris awal
         }
         else
         {
@@ -64,11 +69,18 @@ public class PieceMover : MonoBehaviour
         if (boardLogic == null) return;
 
         // Batasi hanya bisa digerakkan saat gilirannya dan hanya untuk pemain manusia (anggap White = manusia)
+        // Tentukan apakah boleh dikendalikan
+        bool canControl;
         if (turnManager != null)
         {
-            if (!turnManager.IsTurnFor(pieceTeam) || !turnManager.IsHuman(pieceTeam) || turnManager.IsBusy())
-                return;
+            canControl = turnManager.IsTurnFor(pieceTeam) && turnManager.IsHuman(pieceTeam) && !turnManager.IsBusy();
         }
+        else
+        {
+            // Fallback: hanya White yang boleh digerakkan jika tidak ada TurnManager
+            canControl = (pieceTeam == PieceTeam.White);
+        }
+        if (!canControl) return;
         if (battleManager != null && battleManager.IsBattling) return;
 
         // Simpan posisi ASAL kita
@@ -77,28 +89,33 @@ public class PieceMover : MonoBehaviour
         // Sisanya sama (untuk visual drag)
         mouseOffset = transform.position - GetMouseWorldPos();
         if (sRenderer != null) sRenderer.sortingOrder = 10;
+        isDragging = true;
     }
 
     void OnMouseDrag()
     {
-        if (boardLogic == null) return;
+        if (boardLogic == null || !isDragging) return;
         // Bidak mengikuti mouse
         transform.position = GetMouseWorldPos() + mouseOffset;
     }
 
     void OnMouseUp()
     {
-        if (boardLogic == null) return;
+    if (boardLogic == null || !isDragging) return;
 
-        // 1. Dapatkan grid tujuan
-        Vector2Int targetGridPos = boardLogic.GetGridPositionFromWorld(transform.position);
-        var targetPiece = boardLogic.GetPieceAt(targetGridPos);
-        bool isCapture = targetPiece != null && targetPiece.pieceTeam != this.pieceTeam;
+    // 1. Dapatkan grid tujuan (dibulatkan oleh BoardLogic)
+    Vector2Int targetGridPos = boardLogic.GetGridPositionFromWorld(transform.position);
+    var targetPiece = boardLogic.GetPieceAt(targetGridPos);
+    bool isCaptureIntent = targetPiece != null && targetPiece.pieceTeam != this.pieceTeam;
 
         // 2. CEK ATURAN!
         if (IsValidMove(targetGridPos))
         {
-            if (!isCapture)
+            // Re-konfirmasi occupant di kotak target tepat sebelum mengeksekusi
+            var occupantNow = boardLogic.GetPieceAt(targetGridPos);
+            bool isActualCapture = occupantNow != null && occupantNow.pieceTeam != this.pieceTeam;
+
+            if (!isActualCapture)
             {
                 // GERAKAN VALID TANPA CAPTURE -> pindah biasa
                 Vector2 newWorldPos = boardLogic.GetWorldPositionFromGrid(targetGridPos.x, targetGridPos.y);
@@ -125,7 +142,7 @@ public class PieceMover : MonoBehaviour
                     if (turnManager != null) turnManager.SetBusy(true);
                     battleManager.StartDuel(
                         attacker: this,
-                        defender: targetPiece,
+                        defender: occupantNow,
                         targetPos: targetGridPos,
                         onFinished: () =>
                         {
@@ -149,6 +166,7 @@ public class PieceMover : MonoBehaviour
         
         // Kembalikan sorting order
         if (sRenderer != null) sRenderer.sortingOrder = defaultSortOrder;
+        isDragging = false;
     }
 
     /// <summary>
@@ -224,12 +242,8 @@ public class PieceMover : MonoBehaviour
         int dx = targetPos.x - from.x;
         int dy = targetPos.y - from.y;
 
-        // Tentukan baris awal pion serupa catur normal namun adaptif ukuran papan:
-        // - White: baris 1 jika ada (bukan 0) agar bisa double move dari rank kedua.
-        // - Black: baris rows-2 jika ada (bukan rows-1).
-        int startRow = (pieceTeam == PieceTeam.White)
-            ? Mathf.Min(1, boardLogic.rows - 1) // jika rows==1 akan jadi 0 otomatis
-            : Mathf.Max(boardLogic.rows - 2, 0);
+        // Baris awal pion diambil dari posisi awal bidak (bukan berdasarkan ukuran papan)
+        int startRow = initialRow;
 
         // 1) Maju 1: kotak depan harus kosong
         if (dx == 0 && dy == moveDir)
