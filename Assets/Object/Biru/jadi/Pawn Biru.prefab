@@ -16,7 +16,8 @@ GameObject:
   - component: {fileID: 1739418673284450522}
   - component: {fileID: 6001116376425122019}
   - component: {fileID: 3547191847888687063}
-  m_Layer: 0
+  - component: {fileID: -2028227694410188845}
+  m_Layer: 6
   m_Name: Pawn Biru
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32,7 +33,7 @@ Transform:
   m_GameObject: {fileID: 8450836002165722900}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 18.14648, y: -32.00048, z: 1}
+  m_LocalPosition: {x: 18.625177, y: -32.463734, z: 1}
   m_LocalScale: {x: 4.5, y: 4.5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -103,7 +104,7 @@ Animator:
   m_GameObject: {fileID: 8450836002165722900}
   m_Enabled: 1
   m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: 4db3631861a979041a38c38ca4d12f08, type: 2}
+  m_Controller: {fileID: 9100000, guid: c247f3adad0ec874eaa8883f7fd58c9e, type: 2}
   m_CullingMode: 0
   m_UpdateMode: 0
   m_ApplyRootMotion: 0
@@ -195,12 +196,12 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8450836002165722900}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2c70173101b6c4148a87da3e00c0a9f9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxHealth: 100
+  maxHealth: 750
 --- !u!114 &6001116376425122019
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -214,8 +215,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   attackRange: 1.5
-  attackDamage: 10
-  attackRate: 2
+  attackDamage: 35
+  attackRate: 3
   enemyLayers:
     serializedVersion: 2
     m_Bits: 8
@@ -238,3 +239,19 @@ MonoBehaviour:
   groundMask:
     serializedVersion: 2
     m_Bits: 0
+--- !u!114 &-2028227694410188845
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8450836002165722900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 74fd115cca8273a44a231d36999f1e35, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxHealth: 750
+  currentHealth: 0
+  destroyOnDeath: 1
+  debugLog: 0

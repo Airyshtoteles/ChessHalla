@@ -148,5 +148,5 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   pieceType: 2
-  pieceTeam: 0
+  pieceTeam: 1
   currentGridPos: {x: 0, y: 0}

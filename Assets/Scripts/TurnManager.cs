@@ -34,10 +34,22 @@ public class TurnManager : MonoBehaviour
     public bool IsBusy() => busy;
     public void SetBusy(bool v) { busy = v; }
 
+    // Dipakai GameOverManager untuk menentukan tim pemain manusia (fallback ke White jika dua-duanya bot)
+    public PieceTeam GetHumanTeamFallbackWhite()
+    {
+        if (whiteIsHuman && !blackIsHuman) return PieceTeam.White;
+        if (blackIsHuman && !whiteIsHuman) return PieceTeam.Black;
+        // Jika dua-duanya manusia atau dua-duanya bot, anggap White sebagai pemain utama
+        return PieceTeam.White;
+    }
+
     public void NotifyPieceMoved()
     {
         if (busy) return;
         currentTurn = (currentTurn == PieceTeam.White) ? PieceTeam.Black : PieceTeam.White;
+        // Cek kondisi game over setiap kali selesai langkah
+        if (GameOverManager.Instance != null)
+            GameOverManager.Instance.CheckGameOver();
         TryStartBotTurn();
     }
 
@@ -95,6 +107,7 @@ public class TurnManager : MonoBehaviour
                     busy = false;
                     botThinking = false;
                     currentTurn = PieceTeam.White; // setelah langkah bot
+                    if (GameOverManager.Instance != null) GameOverManager.Instance.CheckGameOver();
                     TryStartBotTurn(); // mungkin lanjut kalau multi-bot scenario
                 }
             );
@@ -107,6 +120,7 @@ public class TurnManager : MonoBehaviour
             choice.piece.currentGridPos = choice.to;
             botThinking = false;
             currentTurn = PieceTeam.White;
+            if (GameOverManager.Instance != null) GameOverManager.Instance.CheckGameOver();
             TryStartBotTurn();
         }
     }

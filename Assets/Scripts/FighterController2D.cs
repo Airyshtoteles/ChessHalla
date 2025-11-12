@@ -38,6 +38,7 @@ public class FighterController2D : MonoBehaviour
     private SpriteRenderer sr;
     private Vector3 visualDefaultScale;
     private Quaternion visualDefaultRot;
+    private bool initialFlipX; // simpan orientasi flipX dari prefab untuk kalibrasi otomatis
 
     private bool isPlayerControlled = true;
     private bool canAttack = true;
@@ -76,6 +77,12 @@ public class FighterController2D : MonoBehaviour
         if (visualRoot == null)
         {
             visualRoot = sr != null ? sr.transform : transform;
+        }
+        if (sr != null)
+        {
+            // Simpan nilai flipX dari prefab sebagai orientasi "menghadap kanan" default.
+            // Nanti saat menghadap kiri, kita gunakan kebalikannya.
+            initialFlipX = sr.flipX;
         }
         visualDefaultScale = visualRoot.localScale;
         visualDefaultRot = visualRoot.localRotation;
@@ -211,7 +218,9 @@ public class FighterController2D : MonoBehaviour
         if (useSpriteFlipX && sr != null)
         {
             bool faceLeft = !facingRight;
-            sr.flipX = invertXFlipForLeft ? !faceLeft : faceLeft;
+            // Optional inversion toggle, then apply relative to initial prefab orientation
+            if (invertXFlipForLeft) faceLeft = !faceLeft;
+            sr.flipX = faceLeft ? !initialFlipX : initialFlipX;
             // Reset other transforms to defaults
             if (visualRoot != null)
             {

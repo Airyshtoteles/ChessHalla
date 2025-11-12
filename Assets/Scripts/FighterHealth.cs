@@ -1,22 +1,27 @@
 using UnityEngine;
+using System;
 
+// Health component used by arena fighters and bots
 public class FighterHealth : MonoBehaviour
 {
-    [SerializeField] private int maxHealth = 100;
-    [SerializeField] private bool autoClamp = true;
-    [SerializeField] private bool debugLog = false;
+    [Header("Health")]
+    public int maxHealth = 100;
+    public int currentHealth;
+    public bool destroyOnDeath = false;
+    [Tooltip("Tampilkan log saat damage/tewas")] public bool debugLog = false;
 
-    public int CurrentHealth { get; private set; }
+    public bool IsAlive => currentHealth > 0;
+
+    // Opsional: simpan tim untuk integrasi Arena
     public PieceTeam Team { get; private set; }
 
-    public System.Action OnDeath;
-    public System.Action<int,int> OnHealthChanged; // current, max
+    // Event callback
+    public Action OnDeath; // invoked when hp reaches 0
+    public Action<int,int> OnHealthChanged; // current, max
 
-    private bool dead = false;
-
-    private void Awake()
+    void Awake()
     {
-        CurrentHealth = maxHealth;
+        if (currentHealth <= 0) currentHealth = maxHealth;
     }
 
     public void Initialize(PieceTeam team)
@@ -24,26 +29,29 @@ public class FighterHealth : MonoBehaviour
         Team = team;
     }
 
-    public void ResetHealth()
-    {
-        dead = false;
-        CurrentHealth = maxHealth;
-        OnHealthChanged?.Invoke(CurrentHealth, maxHealth);
-    }
-
     public void ApplyDamage(int amount)
     {
-        if (dead) return;
-        if (amount <= 0) return;
-        CurrentHealth -= amount;
-        if (autoClamp && CurrentHealth < 0) CurrentHealth = 0;
-        if (debugLog) Debug.Log($"[FighterHealth] {gameObject.name} took {amount} dmg -> {CurrentHealth}/{maxHealth}");
-        OnHealthChanged?.Invoke(CurrentHealth, maxHealth);
-        if (CurrentHealth <= 0)
+        if (!IsAlive) return;
+        currentHealth = Mathf.Max(0, currentHealth - Mathf.Max(0, amount));
+        if (debugLog) Debug.Log($"[FighterHealth] {gameObject.name} -{amount} => {currentHealth}/{maxHealth}");
+        OnHealthChanged?.Invoke(currentHealth, maxHealth);
+        if (currentHealth == 0)
         {
-            dead = true;
-            if (debugLog) Debug.Log($"[FighterHealth] {gameObject.name} died");
             OnDeath?.Invoke();
+            if (destroyOnDeath) Destroy(gameObject);
         }
+    }
+
+    public void Heal(int amount)
+    {
+        if (!IsAlive) return;
+        currentHealth = Mathf.Min(maxHealth, currentHealth + Mathf.Max(0, amount));
+        OnHealthChanged?.Invoke(currentHealth, maxHealth);
+    }
+
+    public void ResetHP()
+    {
+        currentHealth = maxHealth;
+        OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 }

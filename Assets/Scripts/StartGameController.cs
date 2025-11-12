@@ -30,6 +30,10 @@ public class StartGameController : MonoBehaviour
     [SerializeField] private bool drawRectGizmo = true;
 
     private bool started;
+    [Header("Restart")]
+    [Tooltip("Boleh klik berkali-kali untuk restart board dan spawn ulang")] [SerializeField] private bool allowRestart = true;
+    [Tooltip("Bersihkan semua bidak sebelum spawn ulang")] [SerializeField] private bool clearBoardOnRestart = true;
+    [Tooltip("Reset kondisi GameOver agar kamera win/lose kembali ke chess")] [SerializeField] private bool resetGameOverState = true;
 
     private void Awake()
     {
@@ -49,8 +53,8 @@ public class StartGameController : MonoBehaviour
     // Dipanggil oleh collider click (OnMouseDown) atau bisa juga dari UI Button/manual.
     public void StartGame()
     {
-        if (started) return;
-        started = true;
+        if (!allowRestart && started)
+            return;
 
         StartCoroutine(DoStartFlow());
     }
@@ -63,7 +67,8 @@ public class StartGameController : MonoBehaviour
 
     private void Update()
     {
-        if (!enableRectClick || started) return;
+        if (!enableRectClick) return;
+        if (!allowRestart && started) return;
         if (!Input.GetMouseButtonDown(0)) return;
 
         var cam = Camera.main != null ? Camera.main : startCamera;
@@ -81,6 +86,8 @@ public class StartGameController : MonoBehaviour
 
     private System.Collections.IEnumerator DoStartFlow()
     {
+        bool wasStarted = started;
+
         // 1) Mainkan animasi tombol (jika ada)
         if (buttonAnimator != null)
         {
@@ -101,28 +108,107 @@ public class StartGameController : MonoBehaviour
             }
         }
 
-        // 2) Pindah kamera
-        if (startCamera != null) startCamera.enabled = false;
-        if (chessCamera != null) chessCamera.enabled = true;
-
-        // 3) Spawn sekali
-        if (triggerSpawnOnStart)
+        // 2) Pastikan referensi chessCamera ada (fallback cari berdasarkan nama)
+        if (chessCamera == null)
         {
-            var spawner = FindFirstObjectByType<RandomPieceSpawner>(FindObjectsInactive.Exclude);
-            if (spawner != null)
+            chessCamera = FindChessCameraFallback();
+        }
+        // Aktifkan kamera chess dan set tag MainCamera (selalu aman dilakukan)
+        if (chessCamera != null)
+        {
+            ActivateCamera(chessCamera);
+        }
+
+        // 3) Reset/game over state jika restart
+        if (resetGameOverState && GameOverManager.Instance != null)
+        {
+            GameOverManager.Instance.ResetState(switchToChessCam: true);
+        }
+
+        // 4) Bersihkan board jika restart
+        var board = FindFirstObjectByType<BoardLogic>(FindObjectsInactive.Exclude);
+        if (allowRestart && wasStarted && clearBoardOnRestart && board != null)
+        {
+            board.ClearAll(destroyObjects: true);
+        }
+
+        // 4.5) Pastikan turn manager tidak busy
+        var tm = FindFirstObjectByType<TurnManager>(FindObjectsInactive.Exclude);
+        if (tm != null)
+        {
+            tm.SetBusy(false);
+        }
+
+        // 5) Spawn (trigger setiap klik jika allowRestart; kalau tidak, hanya sekali)
+        var spawner = FindFirstObjectByType<RandomPieceSpawner>(FindObjectsInactive.Exclude);
+        if (triggerSpawnOnStart && spawner != null)
+        {
+            if (allowRestart && wasStarted)
+            {
+                spawner.ResetSpawnFlag();
+                spawner.TriggerSpawn();
+            }
+            else if (!wasStarted)
             {
                 spawner.TriggerSpawn();
             }
-            else
-            {
-                Debug.LogWarning("[StartGameController] RandomPieceSpawner tidak ditemukan di scene ini.");
-            }
+        }
+        else if (spawner == null)
+        {
+            Debug.LogWarning("[StartGameController] RandomPieceSpawner tidak ditemukan di scene ini.");
         }
 
-        // 4) Sembunyikan tombol (opsional)
-        if (hideThisObjectAfterStart)
+        // 6) Sembunyikan tombol (opsional; kalau restart aktif biasanya tidak disembunyikan)
+        if (hideThisObjectAfterStart && !allowRestart)
         {
             gameObject.SetActive(false);
+        }
+
+        // Set flag bahwa sudah pernah start minimal sekali
+        if (!wasStarted) started = true;
+    }
+
+    // Cari kamera dengan nama yang mengandung "chess" atau "board" sebagai fallback
+    private Camera FindChessCameraFallback()
+    {
+        var cams = FindObjectsByType<Camera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        Camera best = null;
+        foreach (var c in cams)
+        {
+            string n = c.gameObject.name.ToLowerInvariant();
+            if (n.Contains("chess") || n.Contains("board"))
+            {
+                best = c; break;
+            }
+        }
+        // Jika tidak ditemukan berdasarkan nama, pilih kamera yang bukan startCamera
+        if (best == null)
+        {
+            foreach (var c in cams)
+            {
+                if (startCamera != null && c == startCamera) continue;
+                best = c; break;
+            }
+        }
+        return best;
+    }
+
+    // Aktifkan 1 kamera dan matikan yang lain, serta set tag MainCamera
+    private void ActivateCamera(Camera target)
+    {
+        var cams = FindObjectsByType<Camera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        foreach (var c in cams)
+        {
+            bool on = (c == target);
+            c.enabled = on;
+            if (on)
+            {
+                c.gameObject.tag = "MainCamera";
+            }
+            else if (c.gameObject.tag == "MainCamera")
+            {
+                c.gameObject.tag = "Untagged";
+            }
         }
     }
 

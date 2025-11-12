@@ -124,6 +124,10 @@ public class PieceMover : MonoBehaviour
                 boardLogic.UpdatePiecePosition(this, originalGridPos, targetGridPos);
                 currentGridPos = targetGridPos; // Simpan posisi baru
 
+                // Cek game over setelah langkah normal
+                if (GameOverManager.Instance != null)
+                    GameOverManager.Instance.CheckGameOver();
+
                 // Beri tahu turn manager bahwa langkah selesai
                 if (turnManager != null)
                 {
@@ -151,6 +155,7 @@ public class PieceMover : MonoBehaviour
                                 turnManager.SetBusy(false);
                                 turnManager.NotifyPieceMoved();
                             }
+                            if (GameOverManager.Instance != null) GameOverManager.Instance.CheckGameOver();
                         }
                     );
             }
@@ -162,6 +167,12 @@ public class PieceMover : MonoBehaviour
             // Kembalikan bidak ke posisi ASAL
             Vector2 originalWorldPos = boardLogic.GetWorldPositionFromGrid(originalGridPos.x, originalGridPos.y);
             transform.position = originalWorldPos;
+
+            // Bantuan debug: jika target dihuni bidak tim yang sama, beri tahu agar mudah koreksi prefab/team
+            if (targetPiece != null && targetPiece.pieceTeam == this.pieceTeam)
+            {
+                Debug.LogWarning($"[Move] Tidak bisa ke {targetGridPos} karena bidak tim sama di sana: '{targetPiece.name}' (team {targetPiece.pieceTeam}). Cek PieceTeam pada bidak target.");
+            }
         }
         
         // Kembalikan sorting order

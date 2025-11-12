@@ -121,4 +121,38 @@ public class BoardLogic : MonoBehaviour
         if (!IsInsideBoard(pos)) return;
         pieceGrid[pos.x, pos.y] = null;
     }
+
+    /// <summary>
+    /// Hapus seluruh bidak di papan dan kosongkan grid.
+    /// destroyObjects=true akan memanggil Destroy(GameObject) untuk setiap bidak yang ada.
+    /// </summary>
+    public void ClearAll(bool destroyObjects = true)
+    {
+        // Kumpulkan dulu semua piece agar aman saat Destroy
+        var list = new List<PieceMover>();
+        foreach (var p in GetAllPieces())
+        {
+            if (p != null) list.Add(p);
+        }
+
+        if (destroyObjects)
+        {
+            foreach (var p in list)
+            {
+                if (p != null && p.gameObject != null)
+                {
+                    Destroy(p.gameObject);
+                }
+            }
+        }
+
+        // Kosongkan grid
+        for (int x = 0; x < columns; x++)
+        {
+            for (int y = 0; y < rows; y++)
+            {
+                pieceGrid[x, y] = null;
+            }
+        }
+    }
 }

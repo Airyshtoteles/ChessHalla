@@ -107,6 +107,13 @@ public class RandomPieceSpawner : MonoBehaviour
         hasSpawned = true;
     }
 
+    // Izinkan Start Game ulang: reset flag internal agar bisa spawn lagi
+    public void ResetSpawnFlag()
+    {
+        hasSpawned = false;
+        occupiedTiles.Clear();
+    }
+
     /// <summary>
     /// Fungsi helper untuk men-spawn satu tim
     /// </summary>
